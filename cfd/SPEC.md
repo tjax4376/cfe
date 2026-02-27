@@ -1,6 +1,6 @@
 # CFE (Coding For Everyone) – Language Specification
 
-**Version:** 2.1 (Phase 2)  
+**Version:** 3.0 (Phase 9a – Agent Communication)  
 **Punctuation:** Only period (`.`), comma (`,`), and spaces.
 
 ---
@@ -504,3 +504,224 @@ say the value of c.
 - Phase 6: Error handling (try, catch, throw).
 - Phase 7: Modules and file I/O.
 - Phase 8: Concurrency (run, wait).
+
+---
+
+## 18. Agent communication (Phase 9a)
+
+**Goal:** Extend CFE with agent communication primitives so that CFE scripts
+can orchestrate conversations with AI agents from multiple vendors.  The design
+mirrors CFE's existing console I/O model – `say`/`ask` for humans,
+`tell`/`hear` for agents.
+
+### 18.1 New keywords
+
+`agent`, `tell`, `hear`, `chat`, `open`, `close`, `within`, `seconds`,
+`define`, `payload`, `status`, `tokens`, `model`, `error`.
+
+The lexer requires **no changes** – all keywords are standard WORDs.
+
+### 18.2 Agent declaration
+
+```
+define agent <name>.
+```
+
+Binds a symbolic name to an agent whose vendor, model, API key, and system
+prompt are specified in an external configuration file (`agents.yaml`).
+Agent names follow variable-naming rules (ASCII letters only).
+
+```
+define agent searcher.
+define agent writer.
+```
+
+Declaring an agent that is not present in the configuration file is a runtime
+error.
+
+### 18.3 Chat sessions
+
+```
+open chat <name>.
+  <statements>
+close chat.
+```
+
+A chat session groups a sequence of `tell`/`hear` exchanges.  The gateway
+maintains conversation history per session so agents can reference prior
+turns.
+
+- `<name>` is a session identifier (ASCII letters only).
+- Statements inside the chat block execute in order.
+- When `close chat.` is reached, the session history is discarded.
+- Chat blocks may contain any valid CFE statement, including control flow.
+- Chat blocks may not be nested.
+
+### 18.4 Tell (send message to agent)
+
+**Simple form** – send a text expression:
+
+```
+tell <agent> <expression>.
+```
+
+**Block form** – send a structured message:
+
+```
+tell <agent>.
+  set <key> to <value>.
+  ...
+end.
+```
+
+In the block form, variables set inside the `tell` block become the message
+payload (a flat key-value map).  The block creates a temporary scope; the
+enclosing environment is not modified.
+
+### 18.5 Hear (receive response from agent)
+
+```
+hear from <agent> as <name>.
+```
+
+Blocks until the agent responds.  The response is stored in `<name>` as a
+response object whose fields can be accessed with field-access expressions.
+
+**With timeout (Phase 9b):**
+
+```
+hear from <agent> as <name> within <expression> seconds.
+```
+
+If the timeout elapses without a response, the status field of the response
+is `"timeout"`.
+
+### 18.6 Response field access
+
+The `the <field> of <expression>` syntax reads a named field from a response
+object.  Supported fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `payload` | text | The agent's response content |
+| `status` | text | `"success"`, `"error"`, or `"timeout"` |
+| `tokens` | number | Token count for the response |
+| `model` | text | Which model produced the response |
+| `error` | text or none | Error message, or `none` on success |
+
+```
+hear from searcher as result.
+say the payload of result.
+say the status of result.
+say the tokens of result.
+```
+
+This syntax is forward-compatible with Phase 5's `the <field> of <expr>`
+for class instances.
+
+### 18.7 External configuration
+
+Agent details are stored in `agents.yaml`, never in CFE scripts:
+
+```yaml
+agents:
+  searcher:
+    vendor: openai
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    system_prompt: "You are a search assistant."
+    max_tokens: 1000
+    temperature: 0.3
+```
+
+- `vendor` – adapter name (`openai`, `anthropic`, `google`, `local`, `http`).
+- `model` – model identifier.
+- `api_key_env` – environment variable holding the API key.
+- `system_prompt` – injected as the system message for every conversation.
+- `max_tokens` – maximum tokens per response.
+- `temperature` – sampling temperature (0.0–2.0).
+
+### 18.8 Complete example
+
+```
+define agent searcher.
+define agent writer.
+
+open chat tutorial.
+  tell searcher.
+    set intent to text, search.
+    set query to text, python asyncio tutorial.
+    set limit to 3.
+  end.
+  hear from searcher as searchresult.
+
+  if the status of searchresult is text, error then
+    say text, search failed.
+    say the error of searchresult.
+  else
+    tell writer.
+      set intent to text, summarize.
+      set context to the payload of searchresult.
+      set format to text, markdown.
+    end.
+    hear from writer as summary.
+    say the payload of summary.
+  end.
+close chat.
+```
+
+### 18.9 Grammar additions
+
+**New statement forms:**
+
+```
+define agent <name>.
+open chat <name>. <stmts> close chat.
+tell <agent> <expr>.
+tell <agent>. <stmts> end.
+hear from <agent> as <name>.
+```
+
+**New expression forms:**
+
+```
+the payload of <expr>
+the status of <expr>
+the tokens of <expr>
+the model of <expr>
+the error of <expr>
+```
+
+**Updated keywords list:** set, to, say, ask, if, is, not, greater, than,
+less, at, least, most, then, else, end, repeat, times, and, or, true, false,
+none, negative, plus, minus, divided, by, modulo, text, joined, with, the,
+length, of, point, while, do, for, each, from, stop, skip, **define, agent,
+tell, hear, chat, open, close, within, seconds, payload, status, tokens,
+model, error**.
+
+### 18.10 Security / PHA (agent communication)
+
+- **Hazard:** API key exposure in scripts.
+  - **Mitigation:** Keys are referenced by environment variable name in
+    external YAML config, never embedded in CFE source.
+- **Hazard:** Unbounded message loops (agent A instructs agent B instructs
+  agent A …).
+  - **Mitigation:** Maximum message depth limit (configurable, default 50).
+- **Hazard:** Network failures causing script hangs.
+  - **Mitigation:** Default timeout on `hear` (30 s), explicit `within`
+    syntax in Phase 9b.
+- **Hazard:** Prompt injection via message forwarding.
+  - **Mitigation:** Message payloads are treated as data fields, not
+    executable code.  The gateway separates system prompts from user data.
+- **Hazard:** Large payloads causing memory exhaustion.
+  - **Mitigation:** Configurable payload size limits in gateway config.
+- **Hazard:** Agent impersonation.
+  - **Mitigation:** Agents must be declared with `define agent` and match a
+    config entry.  No dynamic agent creation at runtime.
+- **Hazard:** Cost runaway from excessive API calls.
+  - **Mitigation:** Token counting via `the tokens of`, configurable
+    per-session token limits in gateway config.
+- **Hazard:** Network access from the interpreter.
+  - **Mitigation:** All network I/O is delegated to the gateway module.  The
+    interpreter calls gateway Python functions; it does not make HTTP requests
+    directly.

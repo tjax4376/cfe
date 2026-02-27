@@ -1,13 +1,14 @@
 """
-CFD v2 Interpreter – walks the AST and executes statements.
+CFD v3 Interpreter – walks the AST and executes statements.
 
-Version: 2.1
+Version: 3.0
 Author: Generated for aidev
-Change rationale: Phase 2 – while loops, for-each range iteration, stop (break)
-                  and skip (continue) via exception-based loop signals.
+Change rationale: Phase 9a – agent communication primitives (define agent,
+                  tell, hear, open/close chat, response field access).
 
 The interpreter keeps a flat ``env`` dict (symbol table).  Scoping will be
-added when functions arrive in Phase 3.
+added when functions arrive in Phase 3.  Agent communication is delegated
+to the gateway module (cfe.agent.gateway).
 """
 
 from __future__ import annotations
@@ -20,18 +21,23 @@ from .parser import (
     BinaryExpr,
     BoolLiteral,
     DecimalLiteral,
+    DefineAgentStmt,
     Expr,
     ForEachStmt,
+    HearStmt,
     IfStmt,
     LengthExpr,
     NoneLiteral,
     NumberLiteral,
+    OpenChatStmt,
     RepeatStmt,
+    ResponseFieldExpr,
     SayStmt,
     SetStmt,
     SkipStmt,
     Stmt,
     StopStmt,
+    TellStmt,
     TextLiteral,
     UnaryExpr,
     VarRef,
@@ -40,6 +46,28 @@ from .parser import (
 from .typesystem import coerce_numeric_pair, to_text, to_truth
 
 MAX_LOOP_ITERATIONS = 1_000_000
+
+_gateway = None
+
+
+def _get_gateway():
+    """Lazy-load the gateway to avoid circular imports and allow headless use."""
+    global _gateway
+    if _gateway is None:
+        from cfe.agent.gateway import Gateway
+        _gateway = Gateway()
+    return _gateway
+
+
+def set_gateway(gw) -> None:
+    """Inject a gateway instance (used by tests and the CLI)."""
+    global _gateway
+    _gateway = gw
+
+
+def get_gateway():
+    """Return the current gateway instance, creating one if needed."""
+    return _get_gateway()
 
 
 class CfdRuntimeError(Exception):
@@ -100,6 +128,9 @@ def _eval_expr(node: Expr, env: Dict[str, Any]) -> Any:
         operand = _eval_expr(node.operand, env)
         text = to_text(operand)
         return len(text)
+
+    if isinstance(node, ResponseFieldExpr):
+        return _eval_response_field(node, env)
 
     raise CfdRuntimeError(f"Unknown expression node {type(node).__name__}", node.line)
 
@@ -199,6 +230,26 @@ def _eval_comparison(op: str, left: Any, right: Any, line: int) -> bool:
         return lv <= rv
 
     raise CfdRuntimeError(f"Unknown comparison op {op!r}", line)
+
+
+# ---------------------------------------------------------------------------
+# Response field access
+# ---------------------------------------------------------------------------
+
+def _eval_response_field(node: ResponseFieldExpr, env: Dict[str, Any]) -> Any:
+    target = _eval_expr(node.target, env)
+    from cfe.agent.message import Response
+    if not isinstance(target, Response):
+        raise CfdRuntimeError(
+            f"Cannot access field '{node.field}' – value is not an agent response",
+            node.line,
+        )
+    try:
+        return target.get_field(node.field)
+    except KeyError:
+        raise CfdRuntimeError(
+            f"Unknown response field '{node.field}'", node.line,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -352,4 +403,112 @@ def _exec_stmt(stmt: Stmt, env: Dict[str, Any]) -> None:
     if isinstance(stmt, SkipStmt):
         raise _SkipSignal(stmt.line)
 
+    if isinstance(stmt, DefineAgentStmt):
+        _exec_define_agent(stmt)
+        return
+
+    if isinstance(stmt, OpenChatStmt):
+        _exec_open_chat(stmt, env)
+        return
+
+    if isinstance(stmt, TellStmt):
+        _exec_tell(stmt, env)
+        return
+
+    if isinstance(stmt, HearStmt):
+        _exec_hear(stmt, env)
+        return
+
     raise CfdRuntimeError(f"Unknown statement {type(stmt).__name__}", stmt.line)
+
+
+# ---------------------------------------------------------------------------
+# Agent statement executors
+# ---------------------------------------------------------------------------
+
+def _exec_define_agent(stmt: DefineAgentStmt) -> None:
+    from cfe.agent.gateway import GatewayError
+    gw = _get_gateway()
+    try:
+        gw.declare_agent(stmt.name)
+    except GatewayError as exc:
+        raise CfdRuntimeError(str(exc), stmt.line) from None
+
+
+def _exec_open_chat(stmt: OpenChatStmt, env: Dict[str, Any]) -> None:
+    from cfe.agent.session import SessionError
+    gw = _get_gateway()
+    try:
+        gw.open_chat(stmt.name)
+    except SessionError as exc:
+        raise CfdRuntimeError(str(exc), stmt.line) from None
+    try:
+        run(stmt.body, env)
+    finally:
+        try:
+            gw.close_chat(stmt.name)
+        except SessionError:
+            pass
+
+
+def _exec_tell(stmt: TellStmt, env: Dict[str, Any]) -> None:
+    from cfe.agent.message import Message
+    gw = _get_gateway()
+
+    if not gw.is_declared(stmt.agent):
+        raise CfdRuntimeError(
+            f"Agent '{stmt.agent}' has not been declared with 'define agent'",
+            stmt.line,
+        )
+
+    if stmt.message is not None:
+        text = to_text(_eval_expr(stmt.message, env))
+        message = Message(
+            agent_name=stmt.agent,
+            text=text,
+        )
+    elif stmt.body is not None:
+        payload: Dict[str, Any] = {}
+        for body_stmt in stmt.body:
+            if isinstance(body_stmt, SetStmt):
+                payload[body_stmt.name] = _eval_expr(body_stmt.value, env)
+            else:
+                raise CfdRuntimeError(
+                    "Only 'set' statements are allowed inside a 'tell' block",
+                    body_stmt.line,
+                )
+        message = Message(
+            agent_name=stmt.agent,
+            payload=payload,
+        )
+    else:
+        raise CfdRuntimeError(
+            "'tell' must have either a message expression or a block body",
+            stmt.line,
+        )
+
+    response = gw.send(message)
+    env[f"_last_response_{stmt.agent}"] = response
+
+
+def _exec_hear(stmt: HearStmt, env: Dict[str, Any]) -> None:
+    from cfe.agent.message import Response
+    gw = _get_gateway()
+
+    if not gw.is_declared(stmt.agent):
+        raise CfdRuntimeError(
+            f"Agent '{stmt.agent}' has not been declared with 'define agent'",
+            stmt.line,
+        )
+
+    response_key = f"_last_response_{stmt.agent}"
+    response = env.get(response_key)
+    if response is None or not isinstance(response, Response):
+        raise CfdRuntimeError(
+            f"No pending response from agent '{stmt.agent}'. "
+            f"Did you 'tell' the agent first?",
+            stmt.line,
+        )
+
+    env[stmt.var_name] = response
+    del env[response_key]

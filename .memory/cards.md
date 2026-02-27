@@ -65,3 +65,19 @@
 **Issue:** `stop.` inside an `if` inside a loop must propagate through the if-body's `run()` call to reach the enclosing loop handler. Catching signals in `run()` would intercept them prematurely.
 
 **Solution:** `run()` does NOT catch signals. Only loop handlers in `_exec_stmt` catch `_StopSignal`/`_SkipSignal`. A separate `execute()` function wraps the top-level call and converts stray signals to `CfdRuntimeError`.
+
+---
+
+## 9. Text literals in comparisons consume structural keywords
+
+**Issue:** `if the status of reply is text, success then` fails because `text, success then` is parsed as a text literal containing "success then". The text literal parser greedily collects all WORDs until a COMMA or PERIOD, ignoring structural keywords like `then`, `do`, `end`.
+
+**Solution:** Use a variable for the comparison value: `set ok to text, success. if the status of reply is ok then ...`. This is documented as a v2 limitation. Text literals end at punctuation, not at keywords.
+
+---
+
+## 10. Gateway must be lazy-loaded to avoid import overhead
+
+**Issue:** Importing the agent gateway module at interpreter startup adds overhead and requires PyYAML even when running non-agent scripts.
+
+**Solution:** The gateway is lazy-loaded via `_get_gateway()` in the interpreter. It is only instantiated when the first agent statement (`define agent`, `tell`, `hear`) is executed. Tests inject a mock gateway via `set_gateway()`.

@@ -1,10 +1,10 @@
 """
-CFD v2 Parser – builds an AST from the token stream.
+CFD v3 Parser – builds an AST from the token stream.
 
-Version: 2.1
+Version: 3.0
 Author: Generated for aidev
-Change rationale: Phase 2 – while loops, for-each range iteration, stop (break)
-                  and skip (continue) loop control.
+Change rationale: Phase 9a – agent communication primitives (define agent,
+                  tell, hear, open/close chat, response field access).
 
 Expression grammar (precedence low → high)
 ------------------------------------------
@@ -21,7 +21,10 @@ atom        = NUMBER | NUMBER "point" NUMBER
             | "true" | "false" | "none"
             | "text" COMMA <words until comma/period>
             | "the" "length" "of" atom
+            | "the" RESPONSE_FIELD "of" atom
             | IDENT                          (variable reference)
+
+RESPONSE_FIELD = "payload" | "status" | "tokens" | "model" | "error"
 
 cmp_op      = "is" "not"
             | "is" "greater" "than"
@@ -41,6 +44,11 @@ while <expr> do <stmts> end.
 for each <name> from <expr> to <expr> [by <expr>] do <stmts> end.
 stop.
 skip.
+define agent <name>.
+open chat <name>. <stmts> close chat.
+tell <agent> <expr>.
+tell <agent>. <stmts> end.
+hear from <agent> as <name>.
 """
 
 from __future__ import annotations
@@ -118,6 +126,13 @@ class UnaryExpr(Expr):
 @dataclass
 class LengthExpr(Expr):
     operand: Expr
+
+
+@dataclass
+class ResponseFieldExpr(Expr):
+    """Access a named field of an agent response object."""
+    field: str
+    target: Expr
 
 
 # ---------------------------------------------------------------------------
@@ -204,16 +219,47 @@ class ShowWindowsStmt(Stmt):
     pass
 
 
+# Agent communication (Phase 9a)
+
+@dataclass
+class DefineAgentStmt(Stmt):
+    name: str
+
+
+@dataclass
+class OpenChatStmt(Stmt):
+    name: str
+    body: List[Stmt]
+
+
+@dataclass
+class TellStmt(Stmt):
+    agent: str
+    message: Optional[Expr]
+    body: Optional[List[Stmt]]
+
+
+@dataclass
+class HearStmt(Stmt):
+    agent: str
+    var_name: str
+    timeout: Optional[Expr]
+
+
 # ---------------------------------------------------------------------------
 # Token-stream helpers
 # ---------------------------------------------------------------------------
 
 STRUCTURAL_KEYWORDS = frozenset({
-    "then", "else", "end", "times", "do",
+    "then", "else", "end", "times", "do", "close",
 })
 
 COMPARISON_STARTERS = frozenset({
     "is",
+})
+
+RESPONSE_FIELDS = frozenset({
+    "payload", "status", "tokens", "model", "error",
 })
 
 EXPR_KEYWORDS = frozenset({
@@ -223,12 +269,14 @@ EXPR_KEYWORDS = frozenset({
     "true", "false", "none", "point",
     "by", "with", "greater", "than", "less", "at", "least", "most",
     "of", "length", "each", "from", "to",
+    "payload", "status", "tokens", "model", "error",
 })
 
 STATEMENT_KEYWORDS = frozenset({
     "set", "say", "ask", "if", "repeat",
     "while", "for", "stop", "skip",
     "create", "add", "show",
+    "define", "open", "tell", "hear",
 })
 
 
@@ -410,7 +458,7 @@ class _Parser:
     def _parse_atom(self) -> Expr:
         t = self._peek()
 
-        # "the length of <expr>"
+        # "the length of <expr>" or "the <response_field> of <expr>"
         if t.kind == TokenKind.WORD and t.value.lower() == "the":
             saved = self.pos
             self._advance()
@@ -419,6 +467,16 @@ class _Parser:
                 self._expect_word("of")
                 operand = self._parse_atom()
                 return LengthExpr(line=t.line, operand=operand)
+            next_tok = self._peek_safe()
+            if (next_tok is not None
+                    and next_tok.kind == TokenKind.WORD
+                    and next_tok.value.lower() in RESPONSE_FIELDS):
+                field_name = self._advance().value.lower()
+                self._expect_word("of")
+                operand = self._parse_atom()
+                return ResponseFieldExpr(
+                    line=t.line, field=field_name, target=operand,
+                )
             self.pos = saved
 
         # text literal: text, <words until comma/period>
@@ -515,6 +573,14 @@ class _Parser:
             return self._parse_stop()
         if word == "skip":
             return self._parse_skip()
+        if word == "define":
+            return self._parse_define()
+        if word == "open":
+            return self._parse_open_chat()
+        if word == "tell":
+            return self._parse_tell()
+        if word == "hear":
+            return self._parse_hear()
 
         raise ParseError(f"Unknown statement keyword {t.value!r}", t.line, t.col)
 
@@ -672,6 +738,118 @@ class _Parser:
         t = self._advance()  # consume "skip"
         self._expect_kind(TokenKind.PERIOD)
         return SkipStmt(line=t.line)
+
+    # -- define agent <name>. ------------------------------------------------
+
+    def _parse_define(self) -> Stmt:
+        t = self._advance()  # consume "define"
+        if self._check_word("agent"):
+            return self._parse_define_agent(t)
+        raise ParseError(
+            "Expected 'agent' after 'define'",
+            self._peek().line, self._peek().col,
+        )
+
+    def _parse_define_agent(self, define_tok: Token) -> DefineAgentStmt:
+        self._advance()  # consume "agent"
+        name_tok = self._advance()
+        if name_tok.kind != TokenKind.WORD:
+            raise ParseError(
+                "Expected agent name after 'define agent'",
+                name_tok.line, name_tok.col,
+            )
+        self._expect_kind(TokenKind.PERIOD)
+        return DefineAgentStmt(line=define_tok.line, name=name_tok.value)
+
+    # -- open chat <name>. <stmts> close chat. ------------------------------
+
+    def _parse_open_chat(self) -> OpenChatStmt:
+        t = self._advance()  # consume "open"
+        self._expect_word("chat")
+        name_tok = self._advance()
+        if name_tok.kind != TokenKind.WORD:
+            raise ParseError(
+                "Expected chat name after 'open chat'",
+                name_tok.line, name_tok.col,
+            )
+        self._expect_kind(TokenKind.PERIOD)
+        body: List[Stmt] = []
+        while not self._at_end():
+            if self._check_word("close"):
+                self._advance()  # consume "close"
+                self._expect_word("chat")
+                self._expect_kind(TokenKind.PERIOD)
+                return OpenChatStmt(line=t.line, name=name_tok.value, body=body)
+            body.append(self._parse_statement())
+        raise ParseError(
+            "Unterminated 'open chat' block – missing 'close chat.'",
+            t.line, t.col,
+        )
+
+    # -- tell <agent> <expr>. / tell <agent>. <stmts> end. ------------------
+
+    def _parse_tell(self) -> TellStmt:
+        t = self._advance()  # consume "tell"
+        agent_tok = self._advance()
+        if agent_tok.kind != TokenKind.WORD:
+            raise ParseError(
+                "Expected agent name after 'tell'",
+                agent_tok.line, agent_tok.col,
+            )
+        if self._check_kind(TokenKind.PERIOD):
+            self._advance()  # consume "."
+            body: List[Stmt] = []
+            while not self._at_end():
+                if self._check_word("end"):
+                    self._advance()
+                    self._expect_kind(TokenKind.PERIOD)
+                    return TellStmt(
+                        line=t.line, agent=agent_tok.value,
+                        message=None, body=body,
+                    )
+                body.append(self._parse_statement())
+            raise ParseError(
+                "Unterminated 'tell' block – missing 'end.'",
+                t.line, t.col,
+            )
+        expr = self._parse_expr()
+        self._expect_kind(TokenKind.PERIOD)
+        return TellStmt(
+            line=t.line, agent=agent_tok.value,
+            message=expr, body=None,
+        )
+
+    # -- hear from <agent> as <name>. ----------------------------------------
+
+    def _parse_hear(self) -> HearStmt:
+        t = self._advance()  # consume "hear"
+        self._expect_word("from")
+        agent_tok = self._advance()
+        if agent_tok.kind != TokenKind.WORD:
+            raise ParseError(
+                "Expected agent name after 'hear from'",
+                agent_tok.line, agent_tok.col,
+            )
+        saved_stops = self._stop_words
+        self._stop_words = saved_stops | frozenset({"as"})
+        self._stop_words = saved_stops
+        self._expect_word("as")
+        var_tok = self._advance()
+        if var_tok.kind != TokenKind.WORD:
+            raise ParseError(
+                "Expected variable name after 'as'",
+                var_tok.line, var_tok.col,
+            )
+        timeout: Optional[Expr] = None
+        if self._check_word("within"):
+            self._advance()
+            timeout = self._parse_expr()
+            self._expect_word("seconds")
+        self._expect_kind(TokenKind.PERIOD)
+        return HearStmt(
+            line=t.line, agent=agent_tok.value,
+            var_name=var_tok.value, timeout=timeout,
+        )
 
 
 # ---------------------------------------------------------------------------
