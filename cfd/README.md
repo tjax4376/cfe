@@ -1,14 +1,15 @@
-# CFD (Code for Dummies) v2
+# CFE (Coding For Everyone) v2 (formerly CFD – Code for Dummies)
 
 A natural-language programming language. Every statement is an English sentence ending with a period. Only three punctuation marks: period, comma, and space.
 
 ## Quick start
 
 ```bash
-# Run a .cfd file
-python3 -m cfd cfd/examples/showcase.cfd
+# Preferred: run with CFE
+python3 -m cfe cfd/examples/showcase.cfd
 
-# Backward-compatible (also works)
+# Backward-compatible CFD entrypoints (still supported)
+python3 -m cfd cfd/examples/showcase.cfd
 python3 cfd/cfd.py cfd/examples/showcase.cfd
 ```
 
@@ -145,11 +146,56 @@ cfd/
 
 ## Roadmap
 
-- Phase 1: Core types, expressions, text literals, comparisons, logic (done)
-- Phase 2: While loops, for-each range, stop/skip (done)
-- Phase 3: Functions (define, return, call)
+- Phase 1: Core types, expressions, text literals, comparisons, logic (**done**)
+- Phase 2: While loops, for-each range, stop/skip (**done**)
+- Phase 3: Functions (define, return, call) – **planned**, see SPEC section 17.1
 - Phase 4: Data structures (lists, maps)
-- Phase 5: OOP (describe, create, methods, inheritance)
+- Phase 5: OOP (classes, instances, methods, single inheritance)
 - Phase 6: Error handling (try, catch, throw)
 - Phase 7: Modules and file I/O
 - Phase 8: Concurrency (run, wait)
+
+### Functions (Phase 3 – planned CFE)
+
+Functions will bring CFE closer to C++-style free functions while keeping the
+natural-language feel.
+
+Example (not yet implemented in the interpreter):
+
+```text
+define function add with parameters a, b.
+  set result to a plus b.
+  return result.
+end.
+
+set x to call add with 2, 3.
+say text, result is, x.
+```
+
+See `SPEC.md` section 17.1 for the full planned syntax, scoping rules, and
+security notes (recursion limits, call-depth guardrails).
+
+### Classes (Phase 5 – planned CFE)
+
+Classes will add a simple object model on top of functions, roughly analogous to
+basic C++ classes (fields, methods, single inheritance) but expressed in plain
+English.
+
+Example (not yet implemented in the interpreter):
+
+```text
+define class counter.
+  define field value.
+
+  define method increment.
+    set value to value plus 1.
+  end.
+end.
+
+set c to new counter.
+call increment on c.
+say the value of c.
+```
+
+See `SPEC.md` section 17.2 for the planned class and object semantics and
+security notes.

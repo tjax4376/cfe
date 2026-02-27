@@ -93,3 +93,62 @@
 - `cfd/examples/while_loop.cfd`, `cfd/examples/for_each.cfd`, `cfd/examples/stop_skip.cfd`: 3 new example files.
 - `cfd/README.md`: updated with Phase 2 syntax and roadmap.
 - 109 total tests, all passing.
+
+---
+
+## Session 5 – CFE evolution and C++ alignment
+
+**Context:** Begin evolving CFD toward CFE (Coding For Everyone), aligning language capabilities with core C++ concepts and planning a hard rename from `cfd` to `cfe` with minimal shims.
+
+**Discussion points:**
+- Mapped existing CFD v2 constructs to C++:
+  - CFD variables and expressions ↔ C++ variables, arithmetic, comparisons, and boolean logic.
+  - CFD `if`/`else`, `repeat`, `while`, and `for each` ↔ C++ `if`, `while`, `for`/range loops, and `break`/`continue` via `stop`/`skip`.
+  - CFD text and basic I/O (`say`, `ask`) ↔ C++ `std::string` and console I/O, but without exposing streams directly.
+- Identified key C++ gaps to close in CFE:
+  - Functions with parameters and return values (free functions first, no overloading/templates).
+  - A class/object model (fields, methods, single inheritance) built on top of the existing interpreter, using a clear call stack and instance representation.
+  - Structured error handling (CFE analogue of `try`/`catch`) for later phases.
+- Agreed that new features must:
+  - Preserve natural-language syntax (words, commas, periods only).
+  - Be specified in `SPEC.md` and `README.md` before implementation (requirements-first).
+  - Include a lightweight PHA/STRIDE-style note for recursion depth, resource use, and misuse of new constructs.
+- Planned a CFD→CFE rename path:
+  - Introduce a `cfe` package and CLI while keeping a thin `cfd` shim.
+  - Gradually move core modules and docs to `cfe`, then retire the shim after a documented transition.
+
+**Summary of code changed:**
+- No code or spec changes yet; this session records the alignment analysis and rename strategy in the journal as the basis for upcoming function, class, and rename work.
+
+---
+
+## Session 6 – Implementing the initial CFD→CFE rename
+
+**Context:** Expose the new CFE (Coding For Everyone) name in the codebase and
+CLI while keeping the existing CFD implementation intact, following the
+previously agreed rename plan.
+
+**Discussion points:**
+- Introduced a `cfe` Python package that forwards to the existing `cfd`
+  implementation for now, so users can start importing and running code as CFE.
+- Kept CFD fully working to avoid breaking existing scripts, treating it as the
+  legacy name.
+- Updated high-level docs to reflect the new CFE branding while documenting CFD
+  as the former name.
+- Added a small CFE shim test to ensure the new import path behaves correctly
+  and does not suppress errors.
+
+**Summary of code changed:**
+- Added `cfe/__init__.py` (CFE package marker) and `cfe/__main__.py` (CLI
+  entrypoint) that forwards to `cfd.__main__.main`, enabling `python3 -m cfe`.
+- Added shim modules `cfe/lexer.py`, `cfe/parser.py`, `cfe/interpreter.py`,
+  `cfe/typesystem.py`, and `cfe/cfe_gui.py` that re-export the corresponding
+  `cfd.*` modules.
+- Added `cfd/tests/test_cfe_shim.py` to verify that importing and running a
+  simple program via `cfe.*` produces the expected output.
+- Updated `README.md` heading and quick-start examples to prefer CFE (`python3
+  -m cfe`) while keeping CFD entrypoints documented as backward-compatible.
+- Updated `SPEC.md` title and roadmap wording to describe the language under the
+  CFE name.
+- Ran the full test suite (`python3 -m pytest -q` in `cfd/`); all 110 tests
+  (including the new shim test) passed.
