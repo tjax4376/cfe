@@ -1,0 +1,13 @@
+set x to 5.
+set pi to 3 point 14.
+set name to text, hello world.
+set flag to true.
+set nothing to none.
+set neg to negative 10.
+
+say text, x is, x.
+say text, pi is, pi.
+say text, name is, name.
+say text, flag is, flag.
+say text, nothing is, nothing.
+say text, neg is, neg.

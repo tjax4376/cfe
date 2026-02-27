@@ -1,0 +1,22 @@
+say text, welcome to cfd version two.
+
+set radius to 3 point 14.
+set area to radius times radius times 3 point 14.
+say text, area is, area.
+
+set greeting to text, hello.
+set name to text, world.
+say greeting, name.
+
+set x to 10.
+if x is greater than 5 and x is at most 20 then
+  say text, x is between 6 and 20.
+else
+  say text, x is out of range.
+end.
+
+set counter to 0.
+repeat 5 times
+  set counter to counter plus 1.
+end.
+say text, counted to, counter.

@@ -1,0 +1,24 @@
+say text, counting from one to five.
+
+for each i from 1 to 5 do
+  say i.
+end.
+
+say text, even numbers from zero to ten.
+
+for each i from 0 to 10 by 2 do
+  say i.
+end.
+
+say text, countdown.
+
+for each i from 5 to 1 by negative 1 do
+  say i.
+end.
+
+say text, sum of one to ten.
+set total to 0.
+for each i from 1 to 10 do
+  set total to total plus i.
+end.
+say text, total is, total.
