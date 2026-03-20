@@ -1,0 +1,31 @@
+define agent searcher.
+define agent writer.
+
+open chat tutorial.
+  tell searcher.
+    set intent to text, search.
+    set query to text, python asyncio tutorial.
+    set limit to 3.
+  end.
+  hear from searcher as searchresult.
+
+  set err to text, error.
+  if the status of searchresult is err then
+    say text, search failed.
+    say the error of searchresult.
+  else
+    tell writer.
+      set intent to text, summarize.
+      set context to the payload of searchresult.
+      set format to text, markdown.
+      set length to text, short.
+    end.
+    hear from writer as summary.
+
+    say text, tutorial summary.
+    say the payload of summary.
+    say text, total tokens used.
+    set total to the tokens of searchresult plus the tokens of summary.
+    say total.
+  end.
+close chat.

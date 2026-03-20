@@ -1,0 +1,25 @@
+set x to 10.
+
+if x is 10 then
+  say text, x equals 10.
+end.
+
+if x is not 5 then
+  say text, x is not 5.
+end.
+
+if x is greater than 5 then
+  say text, x is greater than 5.
+end.
+
+if x is less than 20 then
+  say text, x is less than 20.
+end.
+
+if x is at least 10 then
+  say text, x is at least 10.
+end.
+
+if x is at most 10 then
+  say text, x is at most 10.
+end.

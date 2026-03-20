@@ -1,0 +1,4 @@
+set x to 5.
+if x is 5 then say yes. else say no. end.
+set x to 0.
+if x is 5 then say yes. else say no. end.

@@ -1,0 +1,23 @@
+set a to 10.
+set b to 3.
+
+set sum to a plus b.
+set diff to a minus b.
+set prod to a times b.
+set quot to a divided by b.
+set rem to a modulo b.
+
+say text, sum, sum.
+say text, diff, diff.
+say text, prod, prod.
+say text, quot, quot.
+say text, rem, rem.
+
+set radius to 5.
+set pi to 3 point 14.
+set area to pi times radius times radius.
+say text, area, area.
+
+set neg to negative 7.
+set result to neg plus 10.
+say text, neg plus 10 is, result.
