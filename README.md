@@ -1,6 +1,8 @@
 # CFE (Coding For Everyone)
 
-A natural-language scripting language and agent gateway designed to make it easier to write structured prompts (so you can reduce LLM token usage vs ad-hoc free-form instructions). CFE (aka CFD) works to reduce token discussions by reducing agent to agent communications. Try it and see, have CFE talk to your agents
+A natural-language scripting language and agent gateway designed to make it easier to write structured prompts (so you can reduce LLM token usage vs ad-hoc free-form instructions). CFE (aka CFD) works to reduce token discussions by reducing agent to agent communications. Try it and see, have CFE talk to your agents.
+
+python, llm, token-efficiency, natural-language, interpreter
 
 ## What this repo includes
 
