@@ -1,0 +1,29 @@
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+
+# Packaging / build output
+build/
+dist/
+cfd/build/
+cfd/dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment files (credentials)
+.env
+.env.*
+!.env.example
+
+# IDE / OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+

@@ -81,3 +81,19 @@
 **Issue:** Importing the agent gateway module at interpreter startup adds overhead and requires PyYAML even when running non-agent scripts.
 
 **Solution:** The gateway is lazy-loaded via `_get_gateway()` in the interpreter. It is only instantiated when the first agent statement (`define agent`, `tell`, `hear`) is executed. Tests inject a mock gateway via `set_gateway()`.
+
+---
+
+## 11. CFE canonical layout: cfe-0.2 = implementation, cfe-0.1 = shim
+
+**Issue:** After transpose, the canonical CFE implementation and folder naming must be clear so scripts and CI use the right path.
+
+**Solution:** The canonical implementation lives in `cfe-0.2/cfe/` (package `cfe`). Run with `PYTHONPATH=cfe-0.2 python3 -m cfe <file>`. Tests: `PYTHONPATH=cfe-0.2 python3 -m pytest cfe-0.2/cfe/tests/ -v`. Build cfe only via `cfe-0.2/cfe.spec` and `build_standalone.sh`. Legacy shim is `cfe-0.1/cfe_0_1/` (re-exports cfe). All references use CFE naming (CfeType, CfeRuntimeError); behaviour unchanged.
+
+---
+
+## 12. Public release should not include build/dist artifacts and pyc
+
+**Issue:** When making the repo public, tracked `__pycache__/` and build outputs (`cfd/build`, `cfd/dist`) increase noise and create avoidable leakage risk.
+
+**Solution:** Added root `.gitignore` and removed cached build/cache artifacts from Git index (keeping local files on disk). Files like `__pycache__/` and `cfd/build`/`cfd/dist` will be ignored in future commits.
