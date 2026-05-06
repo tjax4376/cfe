@@ -1,0 +1,19 @@
+set x to 5.
+set y to 10.
+
+if x is 5 and y is 10 then
+  say text, both true.
+end.
+
+if x is 5 or y is 99 then
+  say text, at least one true.
+end.
+
+if not x is 99 then
+  say text, x is not 99.
+end.
+
+set flag to false.
+if not flag then
+  say text, flag is false.
+end.

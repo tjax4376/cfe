@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KernelChat // OS Config Harness</title>
+    <style>
+        /* --- CSS Variables & Global Reset --- */
+        :root {
+            --color-bg: #0a0a0f;
+            --color-text-primary: #e0ffe0; /* Light green/cyan for main text */
+            --color-accent: #00ff99; /* Electric Green/Cyan for highlights */
+            --color-error: #ff4d4d; /* Sharp Red for errors */
+            --color-prompt: #a0a0c0; /* Muted blue/grey for user input prompt */
+            --font-mono: 'Fira Code', 'Consolas', monospace;
+            --font-sans: 'Space Mono', sans-serif; /* Using a technical font for UI elements */
+            --scanline-opacity: 0.03;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Keep everything contained */
+            font-size: 14px;
+        }
+
+        /* --- CRT/Scanline Effect Layer --- */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Important: allows clicks to pass through */
+            background: repeating-linear-gradient(
+                0deg, 
+                rgba(0, 0, 0, var(--scanline-opacity)), 
+                rgba(0, 0, 0, var(--scanline-opacity)) 1px, 
+                transparent 2px, 
+                transparent 3px
+            );
+            z-index: 10;
+        }
+
+        /* --- Main Container & Chat Area --- */
+        #chat-container {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative; /* For layering effects */
+        }
+
+        /* Custom Scrollbar for Terminal Feel */
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: var(--color-accent);
+            border-radius: 0;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: rgba(0, 255, 153, 0.05);
+        }
+
+        /* --- Message Styling --- */
+        .message {
+            margin-bottom: 15px;
+            line-height: 1.45;
+        }
+
+        .user-message {
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        .ai-message {
+            text-align: left;
+            padding-left: 10px;
+        }
+
+        .user-prompt {
+            color: var(--color-accent);
+            font-weight: bold;
+        }
+
+        .ai-output {
+            color: var(--color-text-primary);
+            white-space: pre-wrap; /* Respects formatting from JS */
+        }
+
+        .ai-output code {
+            background-color: rgba(0, 255, 153, 0.08); /* Subtle code block background */
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .ai-output .error {
+            color: var(--color-error);
+            font-weight: bold;
+        }
+
+        .ai-output .success {
+            color: var(--color-accent);
+        }
+
+        /* --- Input Area (The Command Line Prompt) --- */
+        #input-area {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(0, 255, 153, 0.2);
+            background-color: rgba(0, 0, 0, 0.3); /* Slightly different background for contrast */
+            display: flex;
+            align-items: center;
+        }
+
+        #prompt {
+            color: var(--color-prompt);
+            margin-right: 10px;
+        }
+
+        #command-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            outline: none; /* Remove default focus ring */
+            caret-color: var(--color-accent); /* Cursor color matches accent */
+        }
+
+        /* Focus state for input - subtle glow effect */
+        #command-input:focus {
+            box-shadow: 0 0 8px var(--color-accent);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <!-- Initial System Message -->
+        <div class="message ai-message" id="initial-msg">
+            <span style="color: var(--color-accent); font-weight: bold;">[SYSTEM_INIT]</span> KernelChat v1.0 loaded.<br>
+            Awaiting configuration directives. Type 'help' for available commands or query system status.
+        </div>
+    </div>
+
+    <div id="input-area">
+        <span id="prompt">$</span>
+        <input type="text" id="command-input" autofocus autocomplete="off">
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const commandInput = document.getElementById('command-input');
+
+        // --- Core Logic: Simulating OS Interaction ---
+        const systemResponses = {
+            'help': `Available directives:
+  status      - Check current OS configuration state.
+  set_var <key> <value> - Set a system variable (e.g., set_var PATH /usr/local/bin).
+  list_modules - List currently loaded kernel modules.
+  clear       - Clear the terminal history buffer.
+  exit        - Terminate session.`,
+            'status': `[STATUS_REPORT] System Integrity Check: OK\nCPU Load: 12% | Memory Usage: 4.5GB/32GB\nKernel Version: 6.8.1-custom\nActive Services: SSHD, WebDaemon, LogStreamer.\nConfiguration Hash: 0xAF3B9C1D`,
+            'list_modules': `[MODULES] Loaded Modules:\n- network_stack (v2.1)\n- fs_driver (v3.0)\n- security_policy (v1.5)\n- gpu_accelerator (v4.2)`,
+            'clear': '[BUFFER CLEARED] Terminal history purged.',
+            'exit': 'Session terminated. Goodbye.'
+        };
+
+        /**
+         * Renders a message bubble to the chat container.
+         * @param {string} content - The HTML content of the message.
+         * @param {'user'|'ai'} sender - Who sent the message.
+         */
+        function renderMessage(content, sender) {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', `${sender}-message`);
+            msgDiv.innerHTML = content;
+            chatContainer.appendChild(msgDiv);
+            // Scroll to bottom smoothly
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        /**
+         * Simulates the typing effect for AI responses to enhance immersion.
+         * @param {string} text - The full text to display.
+         * @param {'ai'|'user'} sender - Sender type.
+         */
+        function typeMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', `${sender}-message`);
+            const outputSpan = document.createElement('span');
+            outputSpan.classList.add('ai-output'); // Use ai-output class for styling
+            messageDiv.appendChild(outputSpan);
+            chatContainer.appendChild(messageDiv);
+
+            let i = 0;
+            const speed = 15; // Typing speed in ms
+
+            function type() {
+                if (i < text.length) {
+                    // Simple character append for simulation
+                    outputSpan.innerHTML += text.charAt(i);
+                    i++;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    setTimeout(type, speed);
+                } else {
+                    // Finalize styling/classes if needed (e.g., error)
+                }
+            }
+            type();
+        }
+
+        /**
+         * Handles user input and triggers the appropriate response.
+         */
+        function handleInput() {
+            const command = commandInput.value.trim();
+            if (!command) return;
+
+            // 1. Display User Message
+            const userContent = `<span class="user-prompt">USER@KERNEL:</span> ${command}`;
+            renderMessage(userContent, 'user');
+
+            // Clear input immediately
+            commandInput.value = '';
+
+            if (command.toLowerCase() === 'exit') {
+                typeMessage('Session terminated. Goodbye.', 'ai');
+                commandInput.disabled = true;
+                return;
+            }
+
+            // 2. Process Command and Simulate AI Response
+            let responseText = '';
+            const lowerCommand = command.toLowerCase();
+
+            if (systemResponses[lowerCommand]) {
+                responseText = systemResponses[lowerCommand];
+            } else if (lowerCommand.startsWith('set_var')) {
+                // Example of dynamic command handling
+                const parts = command.split(' ');
+                if (parts.length >= 3) {
+                    const key = parts[1];
+                    const value = parts.slice(2).join(' ');
+                    responseText = `[SUCCESS] Variable '${key}' successfully set to: <code>${value}</code>. Configuration updated in memory.`;
+                } else {
+                    responseText = `[ERROR] Invalid syntax for set_var. Usage: set_var <key> <value>`;
+                }
+            } else {
+                // Default AI response for unknown commands (simulating complex processing)
+                responseText = `[PROCESSING_QUERY] Directive "${command}" requires deep kernel introspection. Analyzing dependencies... \n\n[RESULT_SUMMARY] The requested operation is non-standard for this interface. Suggestion: Rephrase using known directives or consult the system manual (type 'help').\n\n[STATUS_CODE] 404_DIRECTIVE`;
+            }
+
+            // 3. Display AI Response with Typing Effect
+            typeMessage(responseText, 'ai');
+        }
+
+        // --- Event Listeners ---
+        commandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleInput();
+            }
+        });
+
+        // Focus input whenever the user clicks anywhere in the chat area to maintain terminal feel
+        document.body.addEventListener('click', () => {
+            commandInput.focus();
+        });
+
+    </script>
+</body>
+</html>

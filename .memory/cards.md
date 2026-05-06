@@ -97,3 +97,51 @@
 **Issue:** When making the repo public, tracked `__pycache__/` and build outputs (`cfd/build`, `cfd/dist`) increase noise and create avoidable leakage risk.
 
 **Solution:** Added root `.gitignore` and removed cached build/cache artifacts from Git index (keeping local files on disk). Files like `__pycache__/` and `cfd/build`/`cfd/dist` will be ignored in future commits.
+
+---
+
+## 13. Collatz range output should only show newly calculated values
+
+**Issue:** Range-based Collatz runs can produce noisy output by printing duplicate values and "skipped" notices for previously computed numbers.
+
+**Solution:** Keep a global `calculated_numbers` set and print only values first seen during execution. Suppress skipped-value messages entirely, and separately report starts that do not reach `4 -> 2 -> 1`.
+
+---
+
+## 14. Compact Collatz reporting plus current start persistence
+
+**Issue:** Verbose per-step sequence output can be hard to scan when running a start range; process visibility also needs a single-file checkpoint for the current start.
+
+**Solution:** Print one summary line per start containing `count_until_4_2_1` and `total_steps`, and overwrite `number.txt` at each new start so the file always holds the latest processed start value.
+
+---
+
+## 15. Threaded jobs plus checkpoint files need deterministic writes
+
+**Issue:** When multiple worker threads overwrite the same checkpoint file, final file contents can be nondeterministic and not match the final logical start value.
+
+**Solution:** Keep heavy computation in threads, but perform checkpoint file updates in the ordered result-emission loop on the main thread.
+
+---
+
+## 16. Avoid list(range(...)) for huge integer spans
+
+**Issue:** Converting very large integer ranges to a list can raise `OverflowError` (`int too large to convert to C ssize_t`) and explode memory usage.
+
+**Solution:** Use streaming/bounded scheduling: submit a limited window of futures, consume and print in order, and continue submitting incrementally.
+
+---
+
+## 17. TOGAF prep sources must be official-first and dump-aware
+
+**Issue:** Web searches for TOGAF quizzes often return "dumps" or paid question banks with uncertain quality and licensing, which can mislead exam prep.
+
+**Solution:** Build TOGAF study skills with official-first references (The Open Group exam and practice pages). Label third-party quizzes as unofficial drill material only, and do not treat dumps as trusted learning sources.
+
+---
+
+## 18. Quiz UX must be single-question interactive loop
+
+**Issue:** Batch-style quiz prompts (many unanswered questions at once) reduce usability and break interactive tutoring flow.
+
+**Solution:** Enforce single-question mode in quiz skills: ask exactly one question, wait for answer, return immediate rationale and running score, then proceed to next question.

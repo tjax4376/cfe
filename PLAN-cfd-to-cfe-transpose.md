@@ -130,11 +130,11 @@ Agent-related AST nodes (DefineAgentStmt, TellStmt, HearStmt, OpenChatStmt, Resp
 
 ## 5. Resolved decisions (implemented)
 
-1. **Test location:** Option A – tests moved to `cfe-0.2/cfe/tests/` and imports updated to `cfe.*`.  
-2. **Versioning / naming:** All CFD references replaced with CFE. Folders: ex-cfd → `cfe-0.1` (shim package `cfe_0_1`), ex-cfe → `cfe-0.2` (package `cfe`).  
-3. **SPEC.md and README:** Moved to `cfe-0.2/cfe/` and CFD→CFE text updates applied.  
-4. **Standalone executable:** Build cfe only; `cfe-0.2/cfe.spec` and `build_standalone.sh` produce `dist/cfe`.  
-5. **Behaviour:** CFE does not behave differently; `.memory/cards.md` and existing semantics preserved (CfeType, CfeRuntimeError, lazy gateway, etc.).  
+- **Interface Contract:** The interpreter in `cfe/interpreter.py` calls `gw.send(message: Message)` on the gateway instance obtained via a lazy-loaded singleton (`_get_gateway()`). The gateway must implement `send(message: Message) -> Response`. The interpreter constructs a `cfe.agent.message.Message` object, which contains either `text` or `payload`. The gateway returns a `cfe.agent.message.Response` object, which the interpreter stores in the environment under a specific key (`_last_response_{agent}`).
+
+- **GUI Entrypoint:** `cfe/__main__.py` will be updated to use `argparse`. It will default to CLI execution (lex $\rightarrow$ parse $\rightarrow$ execute). If the `--gui` flag is present, it will delegate execution to `cfe/cfe_gui.py`.
+
+- **Test Migration:** Tests from `cfd/tests/*` will be moved to `cfe/tests/*`. This migration is conditional: I will first run all existing tests against the current `cfd` structure. If any test fails, I will pause and require your review before proceeding with the move/rename to ensure no hidden dependencies are broken.
 
 ---
 

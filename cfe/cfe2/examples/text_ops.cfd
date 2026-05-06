@@ -1,0 +1,12 @@
+set greeting to text, hello.
+set name to text, world.
+
+say greeting, name.
+
+set full to greeting joined with name.
+say text, joined is, full.
+
+set len to the length of greeting.
+say text, length of greeting is, len.
+
+say text, one, text, two, text, three.

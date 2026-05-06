@@ -1,0 +1,9 @@
+say text, counting up with while loop.
+
+set x to 1.
+while x is at most 5 do
+  say x.
+  set x to x plus 1.
+end.
+
+say text, done.

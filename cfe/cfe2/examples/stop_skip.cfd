@@ -1,0 +1,29 @@
+say text, skip multiples of three.
+
+for each i from 1 to 10 do
+  if i modulo 3 is 0 then
+    skip.
+  end.
+  say i.
+end.
+
+say text, stop at first number over fifty.
+
+set n to 1.
+while true do
+  set n to n times 2.
+  if n is greater than 50 then
+    stop.
+  end.
+end.
+say text, n is, n.
+
+say text, stop only breaks inner loop.
+repeat 3 times
+  for each i from 1 to 100 do
+    if i is greater than 2 then
+      stop.
+    end.
+    say i.
+  end.
+end.

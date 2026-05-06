@@ -1,0 +1,15 @@
+define agent tutor.
+
+open chat lesson.
+  tell tutor text, explain what a variable is in programming.
+  hear from tutor as explanation.
+  say the payload of explanation.
+
+  tell tutor text, now explain loops using that concept.
+  hear from tutor as followup.
+  say the payload of followup.
+
+  say text, tokens used so far.
+  set total to the tokens of explanation plus the tokens of followup.
+  say total.
+close chat.
